@@ -149,6 +149,27 @@ Open the local address printed by Streamlit, usually `http://localhost:8501`.
 
 The page automatically displays all future available appointments without using an LLM call. Enter conversational requests in the chat box below it.
 
+## Deploy on Render
+
+Create a new **Web Service** in Render and connect this GitHub repository.
+
+Use these settings:
+
+```text
+Runtime: Python 3
+Branch: main
+Build Command: pip install -r requirements.txt
+Start Command: python -m streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+```
+
+Add this secret environment variable in the Render dashboard:
+
+```text
+GROQ_API_KEY=your_real_groq_api_key
+```
+
+Do not add the real key to the repository. Render supplies `PORT` automatically, and the start command binds Streamlit to that port so the service can receive public traffic.
+
 Example conversation:
 
 ```text
