@@ -143,8 +143,49 @@ def validate_appointment_date(date_string):
     return {"valid": True, "message": "Date validated."}
 
 
+def validate_patient_name(patient_name):
+    """Validate and normalize a full name explicitly supplied by the patient."""
+    if not isinstance(patient_name, str):
+        return {
+            "valid": False,
+            "message": "Please provide your full name using at least two words.",
+        }
+
+    cleaned_name = " ".join(patient_name.split())
+    placeholder_names = {
+        "[user's name]",
+        "user's name",
+        "user name",
+        "patient name",
+        "full name",
+        "unknown patient",
+    }
+
+    if cleaned_name.lower() in placeholder_names:
+        return {
+            "valid": False,
+            "message": "Please provide your actual full name instead of a placeholder.",
+        }
+
+    name_parts = cleaned_name.split()
+    if len(name_parts) < 2 or not all(
+        any(character.isalpha() for character in part) for part in name_parts
+    ):
+        return {
+            "valid": False,
+            "message": "Please provide your full name using at least two words.",
+        }
+
+    return {"valid": True, "message": "Name validated.", "name": cleaned_name}
+
+
 def book_appointment(appointment_date, appointment_time, patient_name):
     """Reserve an available slot after validating the requested date."""
+    name_validation = validate_patient_name(patient_name)
+    if not name_validation["valid"]:
+        return {"success": False, "message": name_validation["message"]}
+
+    patient_name = name_validation["name"]
     validation = validate_appointment_date(appointment_date)
     if not validation["valid"]:
         return {"success": False, "message": f"Booking failed: {validation['message']}"}
@@ -178,6 +219,11 @@ def create_session():
 
 def set_pending_booking(session, appointment_date, appointment_time, patient_name):
     """Prepare a valid booking proposal without reserving the slot."""
+    name_validation = validate_patient_name(patient_name)
+    if not name_validation["valid"]:
+        return {"success": False, "message": name_validation["message"]}
+
+    patient_name = name_validation["name"]
     validation = validate_appointment_date(appointment_date)
     if not validation["valid"]:
         return {"success": False, "message": validation["message"]}
@@ -410,7 +456,13 @@ tools = [
                 "properties": {
                     "date": {"type": "string", "description": "Date in YYYY-MM-DD format."},
                     "time": {"type": "string", "description": "Time, for example 2:00 PM."},
-                    "patient_name": {"type": "string", "description": "Patient's name."},
+                    "patient_name": {
+                        "type": "string",
+                        "description": (
+                            "The patient's actual full name of at least two words, explicitly "
+                            "provided by the user. Never guess or use a placeholder."
+                        ),
+                    },
                 },
                 "required": ["date", "time", "patient_name"],
                 "additionalProperties": False,
@@ -478,8 +530,11 @@ def run_agent(user_message, session):
                     "range. Interpret 'this week' as Monday through Sunday of the current week. "
                     "Interpret 'the next seven days' as today through six days from today. Use "
                     "set_pending_booking when all booking details are supplied. A pending booking "
-                    "is only a proposal. Never claim a booking is complete until Python confirms "
-                    "it after explicit agreement."
+                    "is only a proposal. A valid booking requires the patient's actual full name "
+                    "of at least two words. If the user has not supplied their full name, ask for "
+                    "it before calling set_pending_booking. Never invent a name or use a "
+                    "placeholder. Never claim a booking is complete until Python confirms it "
+                    "after explicit agreement."
                 ),
             },
         )

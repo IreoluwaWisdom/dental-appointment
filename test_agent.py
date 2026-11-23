@@ -18,13 +18,13 @@ class BookingLogicTests(unittest.TestCase):
 
     def test_pending_booking_does_not_remove_slot(self):
         session = agent.create_session()
-        result = agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        result = agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         self.assertTrue(result["success"])
         self.assertIn("2:00 PM", agent.check_available_slots("2026-12-26"))
 
     def test_confirmed_booking_removes_slot(self):
         session = agent.create_session()
-        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         result = agent.process_booking_confirmation(session, True)
         self.assertTrue(result["success"])
         self.assertNotIn("2:00 PM", agent.check_available_slots("2026-12-26"))
@@ -32,14 +32,14 @@ class BookingLogicTests(unittest.TestCase):
 
     def test_cancelled_booking_keeps_slot(self):
         session = agent.create_session()
-        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         result = agent.process_booking_confirmation(session, False)
         self.assertFalse(result["success"])
         self.assertIn("2:00 PM", agent.check_available_slots("2026-12-26"))
 
     def test_modification_can_change_only_time(self):
         session = agent.create_session()
-        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         result = agent.modify_pending_booking(session, new_time="4:30 PM")
         self.assertTrue(result["success"])
         self.assertEqual(session["pending_booking"]["date"], "2026-12-26")
@@ -51,7 +51,7 @@ class BookingLogicTests(unittest.TestCase):
         self, _mock_classifier, _mock_extractor
     ):
         session = agent.create_session()
-        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         first_result = agent.handle_booking_response("Can I change it?", session)
         second_result = agent.handle_booking_response("Make it 4:30 PM", session)
         self.assertTrue(first_result["success"])
@@ -61,10 +61,42 @@ class BookingLogicTests(unittest.TestCase):
 
     def test_unavailable_modification_does_not_change_proposal(self):
         session = agent.create_session()
-        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John")
+        agent.set_pending_booking(session, "2026-12-26", "2:00 PM", "John Doe")
         result = agent.modify_pending_booking(session, new_time="3:00 PM")
         self.assertFalse(result["success"])
         self.assertEqual(session["pending_booking"]["time"], "2:00 PM")
+
+    def test_single_name_is_rejected(self):
+        session = agent.create_session()
+
+        result = agent.set_pending_booking(
+            session, "2026-12-26", "2:00 PM", "John"
+        )
+
+        self.assertFalse(result["success"])
+        self.assertIsNone(session["pending_booking"])
+
+    def test_placeholder_name_is_rejected(self):
+        session = agent.create_session()
+
+        result = agent.set_pending_booking(
+            session, "2026-12-26", "2:00 PM", "[User's Name]"
+        )
+
+        self.assertFalse(result["success"])
+        self.assertIsNone(session["pending_booking"])
+
+    def test_full_name_is_normalized(self):
+        session = agent.create_session()
+
+        result = agent.set_pending_booking(
+            session, "2026-12-26", "2:00 PM", "  Ireoluwa   Olukayode  "
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(
+            session["pending_booking"]["patient_name"], "Ireoluwa Olukayode"
+        )
 
     @patch("agent.client.chat.completions.create")
     def test_llm_extracts_natural_language_booking_changes(self, mock_create):
